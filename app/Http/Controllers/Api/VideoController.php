@@ -12,11 +12,40 @@ class VideoController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Video::with('category');
-        if ($request->has('category_id')) {
+        $query = Video::with('category')
+            ->orderBy('created_at', 'desc');
+
+        if ($request->filled('category_id')) {
             $query->where('category_id', $request->category_id);
         }
-        return $query->orderBy('created_at', 'desc')->get();
+        if ($request->filled('q')) {
+            $term = $request->q;
+            $query->where(function ($q) use ($term) {
+                $q->where('title', 'like', "%{$term}%")
+                    ->orWhere('description', 'like', "%{$term}%");
+            });
+        }
+
+        $perPage = min((int) $request->get('per_page', 24), 48);
+        $paginator = $query->paginate($perPage);
+
+        return response()->json([
+            'data' => $paginator->items(),
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'from' => $paginator->firstItem(),
+                'to' => $paginator->lastItem(),
+            ],
+            'links' => [
+                'first' => $paginator->url(1),
+                'last' => $paginator->url($paginator->lastPage()),
+                'prev' => $paginator->previousPageUrl(),
+                'next' => $paginator->nextPageUrl(),
+            ],
+        ]);
     }
 
     public function store(Request $request)
